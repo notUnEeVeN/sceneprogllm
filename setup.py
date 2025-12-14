@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 setup(
     name='sceneprogllm',  # Replace with your package's name
-    version='0.1.7',    # Replace with your package's version
+    version='0.3.0',    # Replace with your package's version
     description='An LLM wrapper built for scene prog projects',
     long_description=open('README.md').read(),  # Optional: Use your README for a detailed description
     long_description_content_type='text/markdown',
@@ -14,13 +14,14 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
     ],
-    python_requires='>=3.9',  # Replace with the minimum Python version your package supports
+    python_requires='>=3.11',  # Replace with the minimum Python version your package supports
     install_requires=[
         'langchain',
         'langchain-openai',
+        'dotenv',
+        'openai',
         'langchain-community',
-        'langchain-ollama',
-        'bentoml',
-        'Image'
+        'Pillow',
+        'numpy',
     ]
 )

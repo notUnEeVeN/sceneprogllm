@@ -1,17 +1,15 @@
 # **SceneProgLLM**
 
-**SceneProgLLM** is a powerful and versatile Python package that wraps around LangChain's LLM interface to provide enhanced functionality, including support for text, code, JSON, list and pydantic response formats along with image input/output, caching, and multiple endpoints. This project is built to support SceneProg projects. 
+**SceneProgLLM** is a powerful and versatile Python package that wraps around LangChain's LLM interface to provide enhanced functionality, including support for text, code, JSON, list, pydantic, image, speech and embedding response formats along with image inputs. This project is built to support SceneProg projects and currently supports only OpenAI backend.
 
 ---
 
 ## **Features**
 1. **Flexible Response Formats**: 
-   - Supports text, code, list, JSON, pydantic and image outputs.
+   - Supports text, code, list, JSON, pydantic, image, speech and embedding outputs.
 2. **Image Input and Output**: 
-   - Accepts image inputs and enables image generation through Stable Diffusion (SD) or OpenAI's image generation API.
-3. **Caching**: 
-   - Integrated caching system to store and retrieve previous query responses for faster execution.
-4. **System Template**:
+   - Accepts image inputs and enables image generation through OpenAI's image generation API.
+3. **System Template**:
     - Allows users to set a system description template containing placeholders which can be later filled with values. 
 ---
 
@@ -23,10 +21,7 @@ pip install sceneprogllm
 
 For proper usage, create a ```.env``` file in the package root with following fields:
 ```text
-TEXT2IMGSD=<endpoint for text to image generation>
 OPENAI_API_KEY=<Your OpenAI key>
-OLLAMA_HOST=Ollama host IP address
-OLLAMA_PORT=Ollama host Port
 ```
 
 ## **Getting Started**
@@ -38,18 +33,18 @@ from sceneprogllm import LLM
 ## **Usage Examples**
 1. **Generating Text Responses**
 ```python
-llm = LLM(name="text_bot", response_format="text")
+llm = LLM(response_format="text")
 response = llm("What is the capital of France?")
 print(response)
 
 >> The capital of France is Paris.
 ```
+
 2. **Generating JSON Responses**
 ```python
 llm = LLM(
-    name="json_bot",
     response_format="json",
-    json_keys=["capital:str", "currency:str"]
+    response_params=["capital":"str", "currency":"str"]
 )
 query = "What is capital and currency of India?"
 response = llm(query)
@@ -61,7 +56,6 @@ print(response)
 3. **Generating List Responses**
 ```python
 llm = LLM(
-   name="list_bot",
    response_format="list",
 )
 query = "List G7 countries"
@@ -79,7 +73,6 @@ class mypydantic(BaseModel):
     capital: str = Field(description="Capital city of the country")
 
 llm = LLM(
-    name="pydantic_bot",
     response_format="pydantic",
 )
 response = llm("What is the capital of France?", pydantic_object=mypydantic)
@@ -90,7 +83,7 @@ print(response)
 
 5. **Generating Python Code**
 ```python
-llm = LLM(name="code_bot", response_format="code")
+llm = LLM(response_format="code")
 query = "Write a Python function to calculate factorial of a number."
 response = llm(query)
 print(response)
@@ -107,46 +100,62 @@ def factorial(n):
             result *= i
         return result
 ```
+
 6. **Generating images from text**
 ```python
-llm = LLM(name="image_bot", response_format="image")
+llm = LLM(response_format="image", response_params={"size":"1024x1536", "quality":"auto"})
 response = llm("Generate an image of a futuristic cityscape.")
-response.save("futuristic_city.jpg")
+response.save("futuristic_city.png")
 
 >> 
 ```
-![Futuristic City](assets/futuristic_city.jpg)
 
-7. **Query using Images**
+7. **Generating speech from text**
 ```python
-llm = LLM(name="image_bot", response_format="json", json_keys=["count:int"])
+llm = LLM(response_format="speech", response_params={"output_path":"speech.wav", "voice":"coral"})
+speech_path = llm("This is how I speak!")
+
+>> 
+```
+
+8. **Generating embeddings from text**
+```python
+llm = LLM(response_format="embedding")
+response = llm(["Hello World", "I like you"])
+
+>> 
+```
+
+9. **Query using Images**
+```python
+llm = LLM(response_format="json", response_params=["count":"int"])
 image_paths = ["assets/lions.png"]
 response = llm("How many lions are there in the image?", image_paths=image_paths)
 print(response)
 
 >> {'count': 6}
 ```
-![lions](assets/lions.png)
 
-8. **Clear LLM cache**
+10. **Generating images from text and image**
 ```python
-from sceneprogllm import clear_llm_cache
-clear_llm_cache()
+llm = LLM(response_format="image", response_params={"size":"1024x1536", "quality":"auto"})
+response = llm("Make the picture realistic", image_paths=["futuristic_city.png"])
+response.save("real_futuristic_city.png")
+
+>> 
 ```
 
-9. **Set seed and temperature**
+11. **Set seed and temperature**
 ```python
 llm = LLM(
-         name="seed_bot",
          seed=0,
          temperature=1.0
          )
 ```
 
-10. **Control behavious via system description**
+12. **Control behavious via system description**
 ```python
 llm = LLM(
-   name="system_bot",
    system_desc="You are a funny AI assistant",
 )
 response = llm("What is the capital of France")
@@ -157,11 +166,10 @@ print(response)
 Ah, the capital of France! That's Paris, the city of romance, lights, and baguettes longer than your arm! Just imagine the Eiffel Tower wearing a beret and saying, "Bonjour!"
 ```
 
-11. **Using Template**
+13. **Using Template**
 ```python
 from sceneprogllm import LLM
 llm = LLM(
-    name="template_bot",
     system_desc="You are a helpful assistant. {description}",
 )
 
@@ -169,21 +177,6 @@ response = llm("What is the capital of France?", system_desc_keys={"description"
 print(response)
 ```
 
-### **Using Ollama**
-
-Additional models like Deekseek-R1 and Llama3.2-vision are available via Ollama with the `LLM` class, make sure Ollama is installed. Then, when initializing the `LLM` object, specify the Ollama Model via `model_name`. For example, `"llama3.2-vision"`. 
-
-See [Ollama model site](https://ollama.com/search) for the available options. Note that different model will support different modes (text, image, etc.).
-
-
-Here is an example:
-
-```python
-from sceneprogllm import LLM
-
-# Example for generating text responses using Ollama
-llm = LLM(name="text_bot", response_format="text", model_name="llama3.2-vision:90b")
-```
 
 ## Queries
 
