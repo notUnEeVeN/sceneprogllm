@@ -1,4 +1,5 @@
 import os
+import time
 import base64
 import numpy as np
 from PIL import Image
@@ -70,11 +71,13 @@ def text2img(
         }
 
     # ---- Call API ----
+    t0 = time.time()
     response = client.responses.create(
         model="gpt-5",
         input=input_payload,
         tools=[tool],
     )
+    latency = round(time.time() - t0, 4)
 
     # ---- Extract image ----
     image_data = [
@@ -86,8 +89,14 @@ def text2img(
     if not image_data:
         raise RuntimeError(f"No image returned. Output: {response.output}")
 
+    usage = {'latency_s': latency}
+    if hasattr(response, 'usage') and response.usage is not None:
+        usage['prompt_tokens'] = response.usage.input_tokens
+        usage['completion_tokens'] = response.usage.output_tokens
+        usage['total_tokens'] = response.usage.total_tokens
+
     image_bytes = base64.b64decode(image_data[0])
-    return Image.open(BytesIO(image_bytes))
+    return Image.open(BytesIO(image_bytes)), usage
 
 def text2speech(
     text: str,
@@ -133,10 +142,12 @@ def text2speech(
     if instructions and model == "gpt-4o-mini-tts":
         request["instructions"] = instructions
 
+    t0 = time.time()
     with client.audio.speech.with_streaming_response.create(**request) as response:
         response.stream_to_file(output_path)
+    usage = {'latency_s': round(time.time() - t0, 4)}
 
-    return output_path
+    return output_path, usage
 
 def text2embeddings(
     texts: list[str],
@@ -154,9 +165,14 @@ def text2embeddings(
         texts = [texts]
     cleaned = [t.replace("\n", " ") for t in texts]
     client = OpenAI()
+    t0 = time.time()
     response = client.embeddings.create(
         model=model,
         input=cleaned,
     )
+    usage = {'latency_s': round(time.time() - t0, 4)}
+    if hasattr(response, 'usage') and response.usage is not None:
+        usage['prompt_tokens'] = response.usage.prompt_tokens
+        usage['total_tokens'] = response.usage.total_tokens
 
-    return np.array([item.embedding for item in response.data])
+    return np.array([item.embedding for item in response.data]), usage

@@ -1,0 +1,32 @@
+{
+  "aggregate": {
+    "total_calls": 2,
+    "total_prompt_tokens": 225,
+    "total_completion_tokens": 545,
+    "total_tokens": 770,
+    "total_cost_usd": 0.00022925,
+    "total_latency_s": 5.9705
+  },
+  "calls": [
+    {
+      "call": 1,
+      "name": "summarizer",
+      "response_format": "text",
+      "prompt_tokens": 39,
+      "completion_tokens": 203,
+      "total_tokens": 242,
+      "cost_usd": 8.315000000000002e-05,
+      "latency_s": 2.8634
+    },
+    {
+      "call": 2,
+      "name": "lister",
+      "response_format": "list",
+      "prompt_tokens": 186,
+      "completion_tokens": 342,
+      "total_tokens": 528,
+      "cost_usd": 0.00014610000000000003,
+      "latency_s": 3.1071
+    }
+  ]
+}

@@ -1,8 +1,10 @@
 import os
+import time
 from dotenv import load_dotenv
 load_dotenv()
 
 from langchain_openai import ChatOpenAI
+from langchain_community.callbacks import get_openai_callback
 from pydantic import BaseModel, create_model
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_core.output_parsers import StrOutputParser, PydanticOutputParser
@@ -10,6 +12,7 @@ from langchain_core.output_parsers import StrOutputParser, PydanticOutputParser
 from .template import SceneProgTemplate
 from .image_helper import ImageHelper
 from .text2x import text2img, text2speech, text2embeddings
+from .tracker import UsageTracker
 
 class ListResponse(BaseModel):
     response: list[str]
@@ -18,7 +21,7 @@ class DefaultJsonResponse(BaseModel):
     response: str
 
 class LLM:
-    def __init__(self, 
+    def __init__(self,
                  system_desc="You are a helpful assistant.",
                  response_format="text",
                  response_params=None,
@@ -26,6 +29,8 @@ class LLM:
                  reasoning_effort="medium",
                  seed=124,
                  temperature=0.8,
+                 name=None,
+                 tracker=None,
                  ):
         assert response_format in ['text', 'list', 'code', 'json', 'pydantic','image','speech','embedding'], "Invalid response format, must be one of 'text', 'list', 'code', 'json', 'image', 'pydantic', 'speech', 'embedding'"
         self.response_format = response_format
@@ -42,6 +47,9 @@ class LLM:
         self.temperature = temperature
         self.seed = seed
         self.model = ChatOpenAI(model_name=model_name, reasoning_effort=reasoning_effort, api_key=os.getenv("OPENAI_API_KEY"),seed=self.seed, temperature=self.temperature)
+        self.last_usage = None
+        self.name = name or response_format
+        self.tracker = tracker
 
     def set_system_desc(self, system_desc_keys=None):
         if '$' in self.system_desc and system_desc_keys is None:
@@ -76,23 +84,32 @@ class LLM:
             pass
 
         if self.response_format == "image":
-            img = text2img(
+            img, usage = text2img(
                 text=query,
                 image_paths=image_paths,
                 **(self.response_params or {})
             )
+            self.last_usage = usage
+            if self.tracker is not None:
+                self.tracker.record(self.last_usage, self.name, self.response_format)
             return img
         elif self.response_format == "speech":
-            audio = text2speech(
+            audio, usage = text2speech(
                 text=query,
                 **(self.response_params or {})
             )
+            self.last_usage = usage
+            if self.tracker is not None:
+                self.tracker.record(self.last_usage, self.name, self.response_format)
             return audio
         elif self.response_format == "embedding":
-            embedding = text2embeddings(
+            embedding, usage = text2embeddings(
                 texts=query,
                 **(self.response_params or {})
             )
+            self.last_usage = usage
+            if self.tracker is not None:
+                self.tracker.record(self.last_usage, self.name, self.response_format)
             return embedding
 
         if self.response_format == "pydantic":
@@ -133,16 +150,37 @@ class LLM:
                 format_instructions = parser.get_format_instructions().replace("{", "{{").replace("}", "}}")
             else:
                 format_instructions = "Responsed as plain text."
-            
+
             self.prompt_template = ChatPromptTemplate.from_messages(
                 messages = self.image_helper.prepare_image_prompt_template(image_paths, format_instructions),
             )
             chain = self.prompt_template | self.model | parser
-            result = self.image_helper.invoke_image_prompt_template(chain, full_prompt, image_paths)
-        
+            t0 = time.time()
+            with get_openai_callback() as cb:
+                result = self.image_helper.invoke_image_prompt_template(chain, full_prompt, image_paths)
+            self.last_usage = {
+                'prompt_tokens': cb.prompt_tokens,
+                'completion_tokens': cb.completion_tokens,
+                'total_tokens': cb.total_tokens,
+                'cost_usd': cb.total_cost,
+                'latency_s': round(time.time() - t0, 4),
+            }
+            if self.tracker is not None:
+                self.tracker.record(self.last_usage, self.name, self.response_format)
         else:
             chain = self.prompt_template | self.model | parser
-            result = chain.invoke({"input": full_prompt})
+            t0 = time.time()
+            with get_openai_callback() as cb:
+                result = chain.invoke({"input": full_prompt})
+            self.last_usage = {
+                'prompt_tokens': cb.prompt_tokens,
+                'completion_tokens': cb.completion_tokens,
+                'total_tokens': cb.total_tokens,
+                'cost_usd': cb.total_cost,
+                'latency_s': round(time.time() - t0, 4),
+            }
+            if self.tracker is not None:
+                self.tracker.record(self.last_usage, self.name, self.response_format)
         
         if self.response_format == "code":
             result = self._sanitize_output(result)
